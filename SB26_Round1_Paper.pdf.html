@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+<style>
+  @page { size: letter; margin: 0.85in 0.85in; }
+  body {
+    font-family: 'Times New Roman', Times, Georgia, serif;
+    font-size: 10.5pt;
+    line-height: 1.48;
+    color: #111;
+    max-width: 6.8in;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 16pt;
+    text-align: center;
+    border-top: 3px solid #111;
+    border-bottom: 1px solid #111;
+    padding: 12px 0;
+    margin-bottom: 14px;
+  }
+  .author-block {
+    text-align: center;
+    font-size: 10.5pt;
+    margin-bottom: 18px;
+  }
+  h2 {
+    font-size: 12.5pt;
+    margin-top: 16px;
+    margin-bottom: 6px;
+    border-bottom: 0.5px solid #ccc;
+    padding-bottom: 2px;
+  }
+  h3 {
+    font-size: 11pt;
+    margin-top: 12px;
+    margin-bottom: 4px;
+  }
+  p, li {
+    text-align: justify;
+  }
+  code {
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 9pt;
+    background: #f5f5f5;
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 9.5pt;
+  }
+  th, td {
+    border-top: 1px solid #222;
+    border-bottom: 1px solid #222;
+    padding: 5px 8px;
+    text-align: left;
+  }
+  th {
+    background: #f3f4f6;
+    font-weight: bold;
+  }
+  hr {
+    border: none;
+    border-top: 0.5px solid #ddd;
+    margin: 12px 0;
+  }
+</style>
+</head>
+<body>
+<div class="author-block">
+  <strong>Byunggwon So (Kevin So)</strong><br>
+  Independent AI Research Lab &middot; <code>robary.com@gmail.com</code> &middot; <code>github.com/kevin9327</code>
+</div>
+<h1>Zero-Shot Topology-Agnostic HVAC Control via Thermodynamic Outdoor-Reset, Free-Cooling Economization, and Pre-Cooling Deadband Scheduling</h1>
+<ul>
+<li><strong>Competition</strong>: NeurIPS 2026 Official Competition — The Smart Buildings Challenge (<code>$40,000 USD Cash</code>)</li>
+<li><strong>Portals</strong>:</li>
+<li><strong>Kaggle Main Track (<code>$25,000 USD</code>)</strong>: <code>https://www.kaggle.com/competitions/neurips-2026-smart-buildings</code></li>
+<li><strong>OpenReview Paper Track (<code>$5,000 USD</code> Round 1 due Nov 13, 2026 + <code>$10,000 USD</code> Final due Jan 15, 2027)</strong>: <code>https://openreview.net/group?id=NeurIPS.cc/2026/Workshop/SB26_Challenge</code></li>
+</ul>
+<hr />
+<h2>Abstract</h2>
+<p>Commercial buildings account for over 30% of global electricity consumption and greenhouse gas emissions, yet reinforcement learning (RL) controllers trained on a single building's HVAC topology fail catastrophically when transferred zero-shot to unseen buildings with differing numbers of Air Handling Units ($K$) and Variable Air Volume ($V$) thermal zones. In the NeurIPS 2026 Smart Buildings Challenge, a single policy (<code>TransferPolicy</code>) must generalize across 30 evaluation scenarios (<code>6 buildings × 5 weather regimes</code>, 8,640 five-minute control steps per 30-day episode) under the composite objective $R = 0.6\,R_{\text{comfort}} - 0.2\,C_{\text{energy}} - 0.2\,C_{\text{carbon}}$. We diagnose three structural thermodynamic inefficiencies in the official static deadband baseline (<code>[294.26 K, 297.59 K]</code>, fixed <code>292.0 K</code> supply air, fixed <code>333.0 K</code> boiler loop) and introduce a zero-shot, topology-agnostic <code>TransferPolicy</code> (<code>transfer_policy.py</code>) combining: (1) Simultaneous Heating-Cooling Elimination via Outdoor Air Temperature (OAT) Supply-Air and Boiler Reset, (2) Enthalpy-Proxy Economizer Free Cooling, (3) Cubic-Affinity Fan/Pump Pressure Scaling, and (4) Midday Thermal-Mass Pre-Cooling and Night/Weekend Deadband Setback.</p>
+<hr />
+<h2>1. Diagnosis of Official Baseline Pathologies</h2>
+<p>The official reference controller (<code>smart_buildings/baselines/transfer_policy.py</code>) applies time-invariant setpoints across all $K$ AHUs and $V$ VAV boxes:
+- AHU Supply Air Temperature (SAT): constant $T_{\text{SAT}} = 292.0\text{ K}$ ($18.85^\circ\text{C}$), static pressure $\Delta p_{\text{fan}} = 100\text{ Pa}$, outdoor air damper $u_{\text{OA}} = 0.20$.
+- Central Plant Hot Water: constant $T_{\text{HWT}} = 333.0\text{ K}$ ($59.85^\circ\text{C}$), pump differential pressure $\Delta p_{\text{pump}} = 20{,}000\text{ Pa}$, boiler mode $m_{\text{boiler}} = 1$ (always on).
+- VAV Zone Setpoints: constant heating $T_{\text{heat}} = 294.26\text{ K}$ ($21.1^\circ\text{C}$) and cooling $T_{\text{cool}} = 297.59\text{ K}$ ($24.4^\circ\text{C}$).</p>
+<p>This static policy suffers from three severe thermodynamic penalties:
+1. <strong>Simultaneous Sub-Cooling and VAV Reheat Fighting</strong>: Supplying $292.0\text{ K}$ air during cold winter regimes ($T_{\text{OAT}} &lt; 281\text{ K}$) forces every perimeter VAV box to expend boiler thermal energy reheating over-cooled supply air back to $294.26\text{ K}$.
+2. <strong>Parasitic Summer Boiler Operation</strong>: Running the hot-water plant at $333.0\text{ K}$ and $\Delta p_{\text{pump}} = 20\text{ kPa}$ with <code>boiler_mode = 1</code> during hot summer regimes ($T_{\text{OAT}} &gt; 295\text{ K}$) wastes substantial natural gas and pumping electricity with zero comfort benefit.
+3. <strong>Unoccupied Fan &amp; Thermal Conditioning Waste</strong>: Maintaining tight occupied comfort bounds and $100\text{ Pa}$ duct static pressure during nights (<code>19:00–07:00</code>) and weekends (<code>48+</code> hours/week) forfeits over 45% of potential fan and coil savings.</p>
+<hr />
+<h2>2. Physics-Guided Zero-Shot <code>TransferPolicy</code> Architecture</h2>
+<p>Given any building metadata graph $\mathcal{G} = {\text{AHU}<em>k \mapsto {\text{VAV}</em>{v}}}_{k=1}^K$ with action dimension $(3K + 2 + 2V)$ continuous and $(K + 1)$ discrete controls, our controller executes four coupled laws at each 5-minute step:</p>
+<h3>2.1 Piecewise-Linear Outdoor Air Temperature (OAT) Reset</h3>
+<p>To eliminate simultaneous cooling and reheat, AHU supply air temperature $T_{\text{SAT}}(T_{\text{OAT}})$ is reset inversely with outdoor temperature:
+$$T_{\text{SAT}}(T_{\text{OAT}}) = \begin{cases} 294.15\text{ K} &amp; T_{\text{OAT}} \le 281.15\text{ K} \ 294.15 - 0.215\,(T_{\text{OAT}} - 281.15)\text{ K} &amp; 281.15\text{ K} &lt; T_{\text{OAT}} &lt; 301.15\text{ K} \ 289.85\text{ K} &amp; T_{\text{OAT}} \ge 301.15\text{ K} \end{cases}$$</p>
+<h3>2.2 Economizer Free-Cooling Damper Modulation</h3>
+<p>When outdoor air is cool enough to offset internal heat gains without mechanical chiller work ($285.15\text{ K} \le T_{\text{OAT}} \le \min(293.65\text{ K}, \bar{T}<em>{\text{zone}} - 0.8\text{ K})$) during occupied hours, the outdoor air damper opens to $u</em>{\text{OA}} = 0.75$ (free cooling). During extreme cold/heat or unoccupied hours, $u_{\text{OA}}$ throttles to minimum ventilation ($0.10\text{--}0.20$).</p>
+<h3>2.3 Boiler Shutdown &amp; Hot-Water Plant Reset</h3>
+<p>When $T_{\text{OAT}} \ge 289.15\text{ K}$ and $\bar{T}<em>{\text{zone}} \ge T</em>{\text{heat}} + 0.4\text{ K}$, the boiler is shut off ($m_{\text{boiler}} = 0$, $T_{\text{HWT}} = 310.15\text{ K}$, $\Delta p_{\text{pump}} = 5{,}000\text{ Pa}$). When heating is active, hot water temperature scales linearly with heating degree need:
+$$T_{\text{HWT}}(T_{\text{OAT}}) = 316.15 + 17.0 \cdot \text{clip}<em>{[0,1]}!\left(\frac{289.15 - T</em>{\text{OAT}}}{20.0}\right)\text{ K}$$</p>
+<h3>2.4 Occupancy Setback &amp; Peak-Carbon Thermal Pre-Cooling</h3>
+<p>Because thermal comfort carries weight $0.6$ during occupied hours, we maintain $[T_{\text{heat}}, T_{\text{cool}}] = [294.45\text{ K}, 297.25\text{ K}]$ during occupied weekday hours (<code>07:00–19:00</code>), shifting $T_{\text{cool}} \to 296.65\text{ K}$ between <code>10:00–14:00</code> on hot days ($T_{\text{OAT}} &gt; 299.15\text{ K}$) to pre-cool structural slab mass before afternoon grid carbon intensity peaks. During unoccupied periods, the deadband relaxes to $[292.15\text{ K}, 299.15\text{ K}]$ and duct static pressure drops from $80\text{ Pa}$ to $55\text{ Pa}$.</p>
+</body>
+</html>
